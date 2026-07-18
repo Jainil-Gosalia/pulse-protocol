@@ -163,7 +163,8 @@ Everything is environment variables — set what you need, ignore the rest.
 | `PULSE_COLLECTOR_URL` | `http://127.0.0.1:8765/api/events` | Where emitters send events |
 | `PULSE_COLLECTOR_TOKEN` | — | Require a bearer token (needed for non-loopback access) |
 | `PULSE_NTFY_TOPIC` | — | ntfy topic for phone push (also Telegram / webhook — see below) |
-| `PULSE_STALE_MINUTES` | `10` | Mark a silent working session "stale" after this long |
+| `PULSE_STALE_MINUTES` | `10` | Mark a silent *working* session "stale" after this long |
+| `PULSE_IDLE_END_MINUTES` | `30` | Mark an abandoned *idle/stale* session "ended" after this long (interactive tools skip `session_end` when you just close the terminal) |
 | `PULSE_RETENTION_DAYS` | `14` | Prune events older than this |
 | `PULSE_GATED_TOOLS` | `Bash,PowerShell,Write,Edit,NotebookEdit` | Which Claude Code tools away-mode holds for approval |
 | `PULSE_DETACH` | off | Fire reporting POSTs off the critical path (for remote collectors) |

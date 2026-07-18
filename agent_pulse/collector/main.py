@@ -12,11 +12,13 @@ from agent_pulse.collector.db import (
     set_session_mode, touch_session, reap_stale_sessions, prune_events,
     create_decision, get_decision, respond_decision, get_pending_decisions,
     expire_decisions, get_stats, queue_message, pop_message,
+    end_abandoned_sessions, delete_session, delete_sessions_by_status,
 )
 from agent_pulse.collector import notifier
 from agent_pulse import netinfo
 
 STALE_MINUTES = int(os.environ.get("PULSE_STALE_MINUTES", "10"))
+IDLE_END_MINUTES = int(os.environ.get("PULSE_IDLE_END_MINUTES", "30"))
 RETENTION_DAYS = int(os.environ.get("PULSE_RETENTION_DAYS", "14"))
 DECISION_TTL = int(os.environ.get("PULSE_DECISION_TTL", "90"))
 AUTH_TOKEN = os.environ.get("PULSE_COLLECTOR_TOKEN")
@@ -167,6 +169,24 @@ async def set_session_mode_endpoint(instance_id: str, mode: SessionMode):
         raise HTTPException(404, "unknown session")
     await broadcast({"type": "session", "data": session})
     return session
+
+
+@app.delete("/api/sessions")
+async def clear_sessions_endpoint(status: str = Query(..., pattern="^(ended|stale|idle)$")):
+    """Bulk-remove all sessions in a status (e.g. clear-ended)."""
+    ids = delete_sessions_by_status(status)
+    for i in ids:
+        await broadcast({"type": "session_removed", "data": {"instance_id": i}})
+    return {"removed": ids}
+
+
+@app.delete("/api/sessions/{instance_id}")
+async def delete_session_endpoint(instance_id: str):
+    """Dismiss a single session (removes it and its events)."""
+    if not delete_session(instance_id):
+        raise HTTPException(404, "unknown session")
+    await broadcast({"type": "session_removed", "data": {"instance_id": instance_id}})
+    return {"removed": instance_id}
 
 
 # ---------- remote approval (Pulse Protocol remote-approval extension) ----
@@ -346,6 +366,8 @@ async def _housekeeping():
     while True:
         try:
             for session in reap_stale_sessions(STALE_MINUTES):
+                await broadcast({"type": "session", "data": session})
+            for session in end_abandoned_sessions(IDLE_END_MINUTES):
                 await broadcast({"type": "session", "data": session})
             for decision in expire_decisions():
                 await broadcast({"type": "decision", "data": decision})

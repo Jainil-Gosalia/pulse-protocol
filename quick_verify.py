@@ -186,6 +186,39 @@ check("qr endpoint serves svg", "svg" in ctype and "<svg" in svg)
 from agent_pulse import netinfo
 check("qr_terminal renders", bool(netinfo.qr_terminal("https://example.com")))
 
+print("\n12. Idle-timeout + dismiss")
+from agent_pulse.collector.db import end_abandoned_sessions
+# an abandoned idle session (terminal closed, no session_end) should age out
+evt("vt-idle", "session_start")
+evt("vt-idle", "completed")  # -> idle
+s = {x["instance_id"]: x for x in api("/api/sessions")}
+check("session is idle before timeout", s["vt-idle"]["status"] == "idle")
+ended = end_abandoned_sessions(0)  # everything idle/stale is instantly abandoned
+s = {x["instance_id"]: x for x in api("/api/sessions")}
+check("idle session ages out to ended",
+      s["vt-idle"]["status"] == "ended" and any(e["instance_id"] == "vt-idle" for e in ended))
+
+
+def _delete(path):
+    req = urllib.request.Request(BASE + path, method="DELETE")
+    try:
+        with urllib.request.urlopen(req, timeout=3) as r:
+            return r.status, json.load(r)
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+evt("vt-del", "user_prompt")
+code, _ = _delete("/api/sessions/vt-del")
+check("delete session returns ok", code == 200)
+check("session gone after delete",
+      "vt-del" not in {x["instance_id"] for x in api("/api/sessions")})
+check("deleting unknown session 404s", _delete("/api/sessions/nope-xyz")[0] == 404)
+
+code, body = _delete("/api/sessions?status=ended")
+check("bulk clear-ended removes ended sessions",
+      code == 200 and "vt-idle" not in {x["instance_id"] for x in api("/api/sessions")})
+
 print("\n" + "=" * 50)
 if failures:
     print(f"{failures} check(s) FAILED")

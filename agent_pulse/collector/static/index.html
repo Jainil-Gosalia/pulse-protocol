@@ -129,6 +129,11 @@
   @media (hover: none) { .away-btn { opacity: 1; } }
   .away-btn:hover { color: var(--muted); border-color: var(--faint); }
   .away-btn.on { border-color: var(--needs_input); color: var(--needs_input); }
+  .del-btn:hover { color: var(--error); border-color: var(--error); }
+  .clear-ended { background: transparent; border: 1px solid var(--border); color: var(--faint);
+    border-radius: 20px; font-size: 10px; padding: 2px 10px; margin-left: 10px; cursor: pointer;
+    text-transform: none; letter-spacing: 0; }
+  .clear-ended:hover { color: var(--error); border-color: var(--error); }
 
   .decision {
     display: flex; align-items: center; gap: 12px;
@@ -412,6 +417,8 @@ function sessionCard(s) {
                 title="Away mode: hold permission prompts for remote approval from this dashboard">
           🌙${s.remote_approval ? " on" : ""}</button>
         ${pill}
+        <button class="away-btn del-btn" data-del="${esc(s.instance_id)}"
+                title="Dismiss — remove this session from the board">✕</button>
       </div>
       <div class="card-summary" title="${esc(s.last_summary)}">${esc(s.last_summary || "—")}</div>
       <div class="card-meta">
@@ -440,9 +447,11 @@ function renderSessions() {
       continue;
     }
     const toggle = g.collapsible ? ` id="toggleEnded"` : "";
+    const clearBtn = g.key === "ended"
+      ? ` <button class="clear-ended" data-clear="ended">✕ clear all</button>` : "";
     html += `<div class="group">
       <div class="group-title ${g.collapsible ? "clickable" : ""}"${toggle}>
-        <span class="dot" style="background:${g.color}"></span>${g.title} (${items.length})${g.collapsible ? " — click to hide" : ""}</div>
+        <span class="dot" style="background:${g.color}"></span>${g.title} (${items.length})${g.collapsible ? " — click to hide" : ""}${clearBtn}</div>
       <div class="cards">${items.map(sessionCard).join("")}</div></div>`;
   }
   $("sessions").innerHTML = html || (q
@@ -475,6 +484,20 @@ function renderSessions() {
           body: JSON.stringify({ remote_approval: !s.remote_approval }),
         });
       } catch {}
+    }));
+  document.querySelectorAll("[data-del]").forEach(el =>
+    el.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = el.dataset.del;
+      state.sessions.delete(id);           // optimistic
+      if (state.selected === id) clearSelection();
+      renderSessions();
+      try { await authFetch(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }); } catch {}
+    }));
+  document.querySelectorAll("[data-clear]").forEach(el =>
+    el.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try { await authFetch(`/api/sessions?status=${encodeURIComponent(el.dataset.clear)}`, { method: "DELETE" }); } catch {}
     }));
   const t = $("toggleEnded");
   if (t) t.addEventListener("click", (e) => { e.stopPropagation(); state.showEnded = !state.showEnded; renderSessions(); });
@@ -693,6 +716,10 @@ function connect() {
     const { type, data } = JSON.parse(msg.data);
     if (type === "session") {
       state.sessions.set(data.instance_id, data);
+      renderSessions();
+    } else if (type === "session_removed") {
+      state.sessions.delete(data.instance_id);
+      if (state.selected === data.instance_id) clearSelection();
       renderSessions();
     } else if (type === "decision") {
       if (data.status === "pending") state.decisions.set(data.id, data);

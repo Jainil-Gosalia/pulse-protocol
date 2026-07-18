@@ -360,6 +360,54 @@ def reap_stale_sessions(stale_minutes: int) -> List[Dict[str, Any]]:
     return [s for i in ids if (s := get_session(i))]
 
 
+def end_abandoned_sessions(idle_minutes: int) -> List[Dict[str, Any]]:
+    """Mark idle/stale sessions untouched for longer than the threshold as
+    'ended'. Interactive tools (Claude Code, etc.) only send session_end on
+    a *clean* exit — closing the terminal or killing the process skips it,
+    leaving the session stuck at 'idle'. This ages those out. Any new event
+    revives the session per the normal transitions."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=idle_minutes)
+    cutoff_s = cutoff.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    now = _now()
+    conn = _connect()
+    c = conn.cursor()
+    c.execute("""SELECT instance_id FROM sessions
+                 WHERE status IN ('idle', 'stale') AND last_seen < ?""", (cutoff_s,))
+    ids = [r[0] for r in c.fetchall()]
+    if ids:
+        c.executemany("UPDATE sessions SET status = 'ended', ended_at = ? WHERE instance_id = ?",
+                      [(now, i) for i in ids])
+        conn.commit()
+    conn.close()
+    return [s for i in ids if (s := get_session(i))]
+
+
+def delete_session(instance_id: str) -> bool:
+    """Remove a session and its events entirely (dashboard dismiss)."""
+    conn = _connect()
+    c = conn.cursor()
+    c.execute("DELETE FROM events WHERE instance_id = ?", (instance_id,))
+    c.execute("DELETE FROM sessions WHERE instance_id = ?", (instance_id,))
+    removed = c.rowcount > 0
+    conn.commit()
+    conn.close()
+    return removed
+
+
+def delete_sessions_by_status(status: str) -> List[str]:
+    """Remove all sessions in a given status (e.g. bulk-clear 'ended')."""
+    conn = _connect()
+    c = conn.cursor()
+    c.execute("SELECT instance_id FROM sessions WHERE status = ?", (status,))
+    ids = [r[0] for r in c.fetchall()]
+    if ids:
+        c.executemany("DELETE FROM events WHERE instance_id = ?", [(i,) for i in ids])
+        c.executemany("DELETE FROM sessions WHERE instance_id = ?", [(i,) for i in ids])
+        conn.commit()
+    conn.close()
+    return ids
+
+
 def prune_events(retention_days: int) -> int:
     """Delete events older than the retention window. Sessions are kept."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
