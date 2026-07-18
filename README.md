@@ -11,7 +11,7 @@ Claude Code, OpenCode, Kilo, Codex, Cursor — all in one live dashboard that te
 [![Python](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](pyproject.toml)
 [![Reference implementation](https://img.shields.io/badge/status-reference%20implementation-22c55e.svg)](#its-a-protocol-not-just-an-app)
 
-<img src="docs/dashboard.png" alt="Agent Pulse dashboard" width="820">
+<img src="https://raw.githubusercontent.com/Jainil-Gosalia/pulse-protocol/main/docs/dashboard.png" alt="Agent Pulse dashboard" width="820">
 
 </div>
 
@@ -35,7 +35,7 @@ Agent Pulse gives every agent one place to report in. Sessions are grouped by **
 And it answers the one question that matters — *which of my agents needs me?* — at a glance, from your desk **or your phone**.
 
 <div align="center">
-<img src="docs/mobile.png" alt="Agent Pulse on mobile" width="300">
+<img src="https://raw.githubusercontent.com/Jainil-Gosalia/pulse-protocol/main/docs/mobile.png" alt="Agent Pulse on mobile" width="300">
 </div>
 
 ---
