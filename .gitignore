@@ -11,6 +11,9 @@ events.db-shm
 .env.*
 *.log
 
+# Launch/marketing drafts — not part of the product
+content/
+
 # Tool runtime caches (canonical plugins live in agent_pulse/adapters/)
 .opencode/
 .kilo/
