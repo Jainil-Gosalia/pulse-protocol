@@ -6,6 +6,7 @@
 
 Claude Code, OpenCode, Kilo, Codex, Cursor — all in one live dashboard that tells you **which agent needs you right now**, so you stop tab-hopping across ten terminals to babysit them.
 
+[![CI](https://github.com/Jainil-Gosalia/pulse-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/Jainil-Gosalia/pulse-protocol/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Spec](https://img.shields.io/badge/Pulse%20Protocol-v0.1-d97757.svg)](spec/pulse-protocol.md)
 [![Python](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](pyproject.toml)
