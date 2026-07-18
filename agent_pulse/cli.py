@@ -155,6 +155,9 @@ def cmd_serve(args) -> int:
         sys.stderr = sys.stderr or log
     if args.token:
         os.environ["PULSE_COLLECTOR_TOKEN"] = args.token
+    # Let the collector know its bind host so the Connect-phone panel can tell
+    # whether LAN/Tailscale URLs are actually reachable.
+    os.environ["PULSE_BOUND_HOST"] = args.host
     import uvicorn
     from agent_pulse.collector.main import app
     if args.host != "127.0.0.1" and not os.environ.get("PULSE_COLLECTOR_TOKEN"):
@@ -246,20 +249,27 @@ def cmd_setup_phone(args) -> int:
                 break
         print("Firewall: OK" if rule_exists() else "Firewall: rule not visible yet — recheck shortly")
 
+    from agent_pulse import netinfo
     token = os.environ.get("PULSE_COLLECTOR_TOKEN")
-    suffix = f"/?token={token}" if token else "/"
-    try:
-        probe = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
-        probe.connect(("8.8.8.8", 80))
-        lan_ip = probe.getsockname()[0]
-        probe.close()
-        print(f"Phone on same Wi-Fi:  http://{lan_ip}:8765{suffix}")
-    except Exception:
-        pass
-    ts = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True)
-    if ts.returncode == 0 and ts.stdout.strip():
-        print(f"Phone from anywhere:  http://{ts.stdout.strip().splitlines()[0]}:8765{suffix}"
-              "  (needs Tailscale signed in on both devices)")
+    urls = netinfo.reachable_urls(int(os.environ.get("PULSE_PORT", "8765")), token)
+    if not urls:
+        print("Couldn't detect a reachable address. Is the machine on a network?")
+        return 0
+
+    primary = urls[0]["url"]
+    print("\nScan on your phone (or open the URL):\n")
+    qr = netinfo.qr_terminal(primary)
+    if qr:
+        try:
+            sys.stdout.write(qr + "\n\n")
+            sys.stdout.flush()
+        except UnicodeEncodeError:
+            pass  # console can't render the blocks — the URLs below still work
+    for u in urls:
+        print(f"  {u['label']:<24} {u['url']}")
+    if not token:
+        print("\n(no token set — anyone on the network can open this. "
+              "Restart with --token for a private link.)")
     return 0
 
 
@@ -289,6 +299,12 @@ def cmd_status(args) -> int:
 
 
 def main() -> None:
+    # QR codes and box-drawing need UTF-8; Windows consoles default to cp1252.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
     parser = argparse.ArgumentParser(prog="agent-pulse", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
 

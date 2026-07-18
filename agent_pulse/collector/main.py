@@ -2,7 +2,7 @@ import os
 import uuid
 import asyncio
 from fastapi import FastAPI, WebSocket, Query, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pathlib import Path
 from typing import Optional, Set
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ from agent_pulse.collector.db import (
     expire_decisions, get_stats, queue_message, pop_message,
 )
 from agent_pulse.collector import notifier
+from agent_pulse import netinfo
 
 STALE_MINUTES = int(os.environ.get("PULSE_STALE_MINUTES", "10"))
 RETENTION_DAYS = int(os.environ.get("PULSE_RETENTION_DAYS", "14"))
@@ -310,6 +311,32 @@ async def manifest():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# These are sync (not async) on purpose: they do blocking work — a
+# `tailscale` subprocess, a socket probe, QR generation — and FastAPI runs
+# sync endpoints in a threadpool, so a slow probe can't freeze the event loop.
+@app.get("/api/connect-info")
+def connect_info(request: Request):
+    """URLs a phone can use to reach this collector, for the 'Connect phone'
+    QR panel. Derives the port from the request; includes the token so the
+    scanned URL just works."""
+    port = request.url.port or 8765
+    urls = netinfo.reachable_urls(port, AUTH_TOKEN)
+    bound = os.environ.get("PULSE_BOUND_HOST") or os.environ.get("PULSE_HOST") or "127.0.0.1"
+    loopback_only = bound in ("127.0.0.1", "localhost", "::1")
+    return {"urls": urls, "has_token": bool(AUTH_TOKEN), "loopback_only": loopback_only}
+
+
+@app.get("/api/qr")
+def qr(data: str = Query(..., max_length=1024)):
+    """Render a QR code (SVG) for an arbitrary string — used by the
+    dashboard's Connect-phone panel."""
+    svg = netinfo.qr_svg(data)
+    if svg is None:
+        raise HTTPException(501, "qrcode library not available")
+    return Response(svg, media_type="image/svg+xml",
+                    headers={"Cache-Control": "no-store"})
 
 
 # ---------- housekeeping loop ----------

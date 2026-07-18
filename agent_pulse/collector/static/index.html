@@ -177,6 +177,26 @@
   .filterbar input:focus { outline: none; border-color: var(--brand); }
   .filterbar input::placeholder { color: var(--faint); }
 
+  .modal-overlay { position: fixed; inset: 0; background: rgba(1,4,9,.75);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px; max-width: 400px; width: 100%; text-align: center; max-height: 90vh; overflow-y: auto; }
+  .modal h3 { font-size: 16px; margin-bottom: 4px; }
+  .modal .msub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .qr-block { margin-bottom: 18px; }
+  .qr-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--brand); margin-bottom: 6px; }
+  .qr-frame { background: #fff; border-radius: 10px; padding: 12px; display: inline-block; line-height: 0; }
+  .qr-frame img { width: 210px; height: 210px; display: block; }
+  .qr-url { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--muted);
+    word-break: break-all; margin-top: 8px; }
+  .modal-warn { background: #33270e; border: 1px solid var(--needs_input); color: var(--needs_input);
+    border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 16px; text-align: left; }
+  .modal-warn code { background: rgba(0,0,0,.3); padding: 1px 5px; border-radius: 4px; }
+  .modal-close { background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 9px 20px; cursor: pointer; font-size: 13px; }
+  .modal-close:hover { border-color: var(--faint); }
+
   .feed-header {
     display: flex; align-items: center; gap: 10px; margin: 30px 0 12px;
     font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -251,7 +271,17 @@
       <span class="attn">attention <b id="cAttn">0</b></span>
       <span>idle <b id="cIdle">0</b></span>
     </div>
+    <button class="notif-btn" id="connectBtn">📱 Connect phone</button>
     <button class="notif-btn" id="notifBtn">🔔 Enable alerts</button>
+  </div>
+
+  <div class="modal-overlay" id="phoneModal">
+    <div class="modal">
+      <h3>📱 Connect your phone</h3>
+      <div class="msub">Scan a code with your camera, or open the link on your phone.</div>
+      <div id="phoneBody"></div>
+      <button class="modal-close" id="phoneClose">Close</button>
+    </div>
   </div>
 
   <div class="statstrip" id="statstrip">
@@ -575,6 +605,50 @@ $("notifBtn").addEventListener("click", async () => {
   }
   localStorage.setItem("pulse_notify", state.notify ? "1" : "0");
   setNotifyUi();
+});
+
+/* ---------- connect phone (QR) ---------- */
+
+async function openPhoneModal() {
+  const body = $("phoneBody");
+  body.innerHTML = `<div class="msub">Detecting your addresses…</div>`;
+  $("phoneModal").classList.add("show");
+
+  let info = { urls: [], loopback_only: false };
+  try { info = await (await authFetch("/api/connect-info")).json(); } catch {}
+
+  let urls = info.urls || [];
+  if (!urls.length) {
+    // Fall back to whatever address this dashboard is being viewed at.
+    const u = location.origin + "/" + (TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : "");
+    urls = [{ label: "This address", url: u }];
+  }
+
+  const warn = info.loopback_only
+    ? `<div class="modal-warn">⚠️ The collector is bound to localhost, so these
+       links only work on this machine. Restart with
+       <code>agent-pulse serve --host 0.0.0.0 --token …</code> then
+       <code>agent-pulse setup-phone</code> to reach it from your phone.</div>`
+    : "";
+
+  const qrSrc = (u) => `/api/qr?data=${encodeURIComponent(u)}`
+    + (TOKEN ? `&token=${encodeURIComponent(TOKEN)}` : "");
+
+  body.innerHTML = warn + urls.map(u => `
+    <div class="qr-block">
+      <div class="qr-label">${esc(u.label)}</div>
+      <div class="qr-frame"><img alt="QR code" src="${qrSrc(u.url)}"></div>
+      <div class="qr-url">${esc(u.url)}</div>
+    </div>`).join("");
+}
+
+$("connectBtn").addEventListener("click", openPhoneModal);
+$("phoneClose").addEventListener("click", () => $("phoneModal").classList.remove("show"));
+$("phoneModal").addEventListener("click", (e) => {
+  if (e.target.id === "phoneModal") $("phoneModal").classList.remove("show");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") $("phoneModal").classList.remove("show");
 });
 
 /* ---------- data + websocket ---------- */

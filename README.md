@@ -77,7 +77,8 @@ agent-pulse serve --host 0.0.0.0 --token "$(openssl rand -hex 16)"
 agent-pulse setup-phone           # opens the firewall via one click, prints your phone URL
 ```
 
-- **Same Wi-Fi** → open the printed `http://<pc-ip>:8765/?token=…` on your phone, *Add to Home Screen*.
+- **Scan to connect** → `setup-phone` prints a QR code in the terminal, and the dashboard has a **📱 Connect phone** button that shows one — scan it with your camera and the dashboard opens on your phone, token and all. No typing long URLs.
+- **Same Wi-Fi** → or open the printed `http://<pc-ip>:8765/?token=…` on your phone, *Add to Home Screen*.
 - **Any network** → put both devices on [Tailscale](https://tailscale.com) and use the Tailscale IP, or run `agent-pulse serve --tunnel` for an instant public HTTPS URL (no VPN, no firewall).
 - **Push notifications** → install the ntfy app, `export PULSE_NTFY_TOPIC=<something-unguessable>`, restart. Now your phone buzzes when an agent is blocked.
 

@@ -172,6 +172,20 @@ check("events endpoint stays 200 with bad row",
       # round-trips through JSON like the real API response
       json.dumps(api("/api/events?instance_id=vt-surrogate")) is not None)
 
+print("\n11. Connect-phone (QR) endpoints")
+# Generous timeout: the first call may probe a slow/absent tailscale daemon.
+with urllib.request.urlopen(BASE + "/api/connect-info", timeout=10) as r:
+    ci = json.load(r)
+check("connect-info returns urls + loopback flag",
+      "urls" in ci and "loopback_only" in ci)
+with urllib.request.urlopen(BASE + "/api/qr?data=hello", timeout=10) as r:
+    ctype = r.headers.get("Content-Type", "")
+    svg = r.read().decode("utf-8", "replace")
+check("qr endpoint serves svg", "svg" in ctype and "<svg" in svg)
+
+from agent_pulse import netinfo
+check("qr_terminal renders", bool(netinfo.qr_terminal("https://example.com")))
+
 print("\n" + "=" * 50)
 if failures:
     print(f"{failures} check(s) FAILED")
