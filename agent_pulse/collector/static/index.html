@@ -158,8 +158,24 @@
     font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   }
   .card-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); }
-  .card-meta .cwd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
+  .card-meta .cwd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
   .quiet-hint { color: var(--needs_input); }
+  /* live-ticking elapsed timer — the "pulse" of each session */
+  .card-tick { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums;
+    font-weight: 600; white-space: nowrap; }
+  .tick-working { color: var(--working); }
+  .tick-working.overdue { color: var(--stale); }
+  .tick-needs_input, .tick-error { color: var(--needs_input); }
+  .tick-error { color: var(--error); }
+
+  .filterbar { max-width: 1200px; margin: 0 auto; padding: 8px 24px 0; }
+  .filterbar input {
+    width: 100%; box-sizing: border-box; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px;
+    font-family: inherit;
+  }
+  .filterbar input:focus { outline: none; border-color: var(--brand); }
+  .filterbar input::placeholder { color: var(--faint); }
 
   .feed-header {
     display: flex; align-items: center; gap: 10px; margin: 30px 0 12px;
@@ -245,6 +261,11 @@
     <span class="period">last 7 days</span>
   </div>
 
+  <div class="filterbar">
+    <input id="sessionFilter" type="search" autocomplete="off" spellcheck="false"
+           placeholder="Filter sessions — project, tool, host, or what it's doing…">
+  </div>
+
   <div class="wrap">
     <div id="decisions"></div>
     <div id="sessions"></div>
@@ -316,6 +337,15 @@ function relTime(iso) {
 function clockTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour12: false });
 }
+// Compact live elapsed: m:ss under an hour, then Xh Ym.
+function elapsedStr(iso) {
+  if (!iso) return "";
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  return `${Math.floor(s / 86400)}d`;
+}
+const LIVE = new Set(["working", "needs_input", "error"]);
 
 /* ---------- rendering ---------- */
 
@@ -331,10 +361,15 @@ function renderCounts() {
 }
 
 function sessionCard(s) {
-  const quiet = s.status === "working" && (Date.now() - new Date(s.last_seen).getTime()) > 180000;
   const pill = `<span class="status-pill pill-${esc(s.status)}">` +
     (s.status === "working" ? '<span class="pulse-dot"></span>' : "") +
     esc(STATUS_TEXT[s.status] || s.status) + "</span>";
+  // Live states get a ticking timer (waiting-on-you / time-since-progress);
+  // terminal states keep a plain relative time.
+  const prefix = s.status === "working" ? "active " : "waiting ";
+  const rightMeta = LIVE.has(s.status)
+    ? `<span class="card-tick tick-${esc(s.status)}" data-since="${esc(s.last_seen)}" data-prefix="${prefix}">${prefix}${elapsedStr(s.last_seen)}</span>`
+    : `<span>${relTime(s.last_seen)}</span>`;
   return `
     <div class="card st-${esc(s.status)} ${state.selected === s.instance_id ? "selected" : ""}"
          data-id="${esc(s.instance_id)}">
@@ -351,13 +386,19 @@ function sessionCard(s) {
       <div class="card-summary" title="${esc(s.last_summary)}">${esc(s.last_summary || "—")}</div>
       <div class="card-meta">
         <span class="cwd" title="${esc(s.cwd)}">${esc(s.hostname)} · ${esc(s.session_id ? s.session_id.slice(0, 8) : "?")}</span>
-        <span>${quiet ? '<span class="quiet-hint">quiet ' + relTime(s.last_seen).replace(" ago", "") + " · </span>" : ""}${relTime(s.last_seen)}</span>
+        ${rightMeta}
       </div>
     </div>`;
 }
 
 function renderSessions() {
-  const all = [...state.sessions.values()];
+  const q = (state.query || "").trim().toLowerCase();
+  const match = (s) => !q
+    || folderOf(s.cwd).toLowerCase().includes(q)
+    || (s.source || "").toLowerCase().includes(q)
+    || (s.hostname || "").toLowerCase().includes(q)
+    || (s.last_summary || "").toLowerCase().includes(q);
+  const all = [...state.sessions.values()].filter(match);
   let html = "";
   for (const g of GROUPS) {
     const items = all.filter(s => g.statuses.includes(s.status))
@@ -374,8 +415,9 @@ function renderSessions() {
         <span class="dot" style="background:${g.color}"></span>${g.title} (${items.length})${g.collapsible ? " — click to hide" : ""}</div>
       <div class="cards">${items.map(sessionCard).join("")}</div></div>`;
   }
-  $("sessions").innerHTML = html ||
-    `<div class="empty"><div class="big">📡</div>No sessions yet — start an agent with a Pulse adapter installed.</div>`;
+  $("sessions").innerHTML = html || (q
+    ? `<div class="empty">No sessions match “${esc(q)}”.</div>`
+    : `<div class="empty"><div class="big">📡</div>No sessions yet — start an agent with a Pulse adapter installed.</div>`);
 
   document.querySelectorAll(".card").forEach(el =>
     el.addEventListener("click", () => selectSession(el.dataset.id)));
@@ -612,10 +654,28 @@ $("clearSel").addEventListener("click", clearSelection);
 
 /* ---------- boot ---------- */
 
+// Live-tick the elapsed timers every second without re-rendering cards
+// (preserves hover state and is cheap — just updates text + overdue class).
+function tickElapsed() {
+  document.querySelectorAll(".card-tick[data-since]").forEach(el => {
+    el.textContent = el.dataset.prefix + elapsedStr(el.dataset.since);
+    if (el.classList.contains("tick-working")) {
+      const stuck = (Date.now() - new Date(el.dataset.since).getTime()) > 180000;
+      el.classList.toggle("overdue", stuck);
+    }
+  });
+}
+
+$("sessionFilter").addEventListener("input", (e) => {
+  state.query = e.target.value;
+  renderSessions();
+});
+
 setNotifyUi();
 loadAll();
 connect();
-setInterval(renderSessions, 15000);   // keep relative times + quiet hints fresh
+setInterval(tickElapsed, 1000);       // live elapsed timers
+setInterval(renderSessions, 15000);   // refresh ordering + terminal-state relative times
 </script>
 </body>
 </html>
