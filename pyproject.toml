@@ -1,0 +1,31 @@
+[project]
+name = "agent-pulse"
+version = "0.2.0"
+description = "One inbox for all your coding agents — reference implementation of the Pulse Protocol"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=12.0",
+]
+
+[project.scripts]
+agent-pulse = "agent_pulse.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agent_pulse*"]
+
+[tool.setuptools.package-data]
+agent_pulse = ["adapters/*.js", "collector/static/*.html"]

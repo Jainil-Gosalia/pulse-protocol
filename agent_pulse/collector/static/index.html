@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d1117">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>Agent Pulse</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2129;
+    --border: #2d333b;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --faint: #6e7681;
+    --working: #3b82f6;
+    --needs_input: #f59e0b;
+    --error: #ef4444;
+    --idle: #22c55e;
+    --stale: #9e6a03;
+    --ended: #6e7681;
+    --src-claude_code: #d97757;
+    --src-opencode: #10b981;
+    --src-kilo: #a78bfa;
+    --src-codex: #22d3ee;
+    --src-cursor: #60a5fa;
+    --src-unknown: #9ca3af;
+    --brand: #d97757;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 24px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+  .logo span { color: var(--brand); }
+  .conn { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .conn-dot.on { background: var(--brand); box-shadow: 0 0 6px var(--brand); animation: pulse 1.8s ease-in-out infinite; }
+  .topbar .counts { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-left: auto; }
+  .counts b { color: var(--text); }
+  .counts .attn b { color: var(--needs_input); }
+  .notif-btn {
+    background: var(--panel2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  .notif-btn:hover { color: var(--text); border-color: var(--faint); }
+  .notif-btn.on { color: var(--idle); border-color: var(--idle); background: #10241a; }
+
+  /* 7-day analytics strip — the product's differentiator ("how long agents
+     wait on you"), given a real slot instead of faint topbar filler. */
+  .statstrip { display: flex; align-items: stretch; max-width: 1200px; margin: 0 auto; padding: 16px 24px 4px; }
+  .stat { display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    padding-right: 24px; margin-right: 24px; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: none; }
+  .stat .num { font-size: 22px; font-weight: 700; line-height: 1;
+    font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--text); }
+  .stat .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--faint); }
+  .stat.hero .num { color: var(--brand); }
+  .statstrip .period { margin-left: auto; align-self: flex-end; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .8px; color: var(--faint); padding-bottom: 3px; }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 8px 24px 60px; }
+
+  .group { margin-bottom: 22px; }
+  .group-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--muted); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .group-title .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .group-title.clickable { cursor: pointer; user-select: none; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; cursor: pointer;
+    transition: border-color .15s, transform .1s;
+    border-left: 3px solid var(--border);
+  }
+  .card:hover { border-color: var(--faint); }
+  .card.selected { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+  .card.st-working { border-left-color: var(--working); }
+  .card.st-needs_input { border-left-color: var(--needs_input); background: #1d1a12; }
+  .card.st-error { border-left-color: var(--error); background: #1d1214; }
+  .card.st-idle { border-left-color: var(--idle); }
+  .card.st-stale { border-left-color: var(--stale); opacity: .8; }
+  .card.st-ended { border-left-color: var(--ended); opacity: .65; }
+
+  .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .src-chip {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+    color: #0d1117; letter-spacing: .3px; white-space: nowrap;
+  }
+  .card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .status-pill {
+    font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+  }
+  .pill-working { background: #172a46; color: var(--working); }
+  .pill-needs_input { background: #33270e; color: var(--needs_input); }
+  .pill-error { background: #351719; color: var(--error); }
+  .pill-idle { background: #12291a; color: var(--idle); }
+  .pill-stale { background: #2b2205; color: #d29922; }
+  .pill-ended { background: #21262d; color: var(--ended); }
+
+  .away-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--faint);
+    border-radius: 5px; font-size: 10px; padding: 2px 7px; cursor: pointer; white-space: nowrap;
+    opacity: 0; transition: opacity .12s;
+  }
+  /* Reveal card actions on hover so state (title + pill) reads first.
+     Active away mode stays visible; touch devices (no hover) show always. */
+  .card:hover .away-btn, .away-btn.on { opacity: 1; }
+  @media (hover: none) { .away-btn { opacity: 1; } }
+  .away-btn:hover { color: var(--muted); border-color: var(--faint); }
+  .away-btn.on { border-color: var(--needs_input); color: var(--needs_input); }
+
+  .decision {
+    display: flex; align-items: center; gap: 12px;
+    background: #291f0b; border: 1px solid var(--needs_input);
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
+  }
+  .decision .d-summary {
+    flex: 1; font-size: 13px; color: var(--text);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .decision .d-proj { color: var(--needs_input); font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .d-btn { padding: 7px 18px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; border: none; }
+  .d-allow { background: var(--idle); color: #0d1117; }
+  .d-deny { background: var(--error); color: #fff; }
+  .d-btn:hover { filter: brightness(1.15); }
+  .pulse-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor; margin-right: 5px; vertical-align: 1px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+
+  .card-summary {
+    font-size: 12.5px; color: var(--muted); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; margin-bottom: 8px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  .card-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); }
+  .card-meta .cwd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
+  .quiet-hint { color: var(--needs_input); }
+
+  .feed-header {
+    display: flex; align-items: center; gap: 10px; margin: 30px 0 12px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--muted);
+  }
+  .clear-sel {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+    font-size: 11px; border-radius: 20px; padding: 3px 10px; cursor: pointer;
+    text-transform: none; letter-spacing: 0;
+  }
+  .clear-sel:hover { color: var(--text); }
+  .feed-filters { margin-left: auto; display: flex; gap: 6px; }
+  .fbtn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-size: 11px; border-radius: 6px; padding: 3px 10px; cursor: pointer;
+    text-transform: none; letter-spacing: 0;
+  }
+  .fbtn.active { border-color: var(--brand); color: var(--brand); }
+
+  .feed { display: flex; flex-direction: column; gap: 6px; }
+  .evt {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 14px; cursor: pointer; font-size: 12.5px;
+  }
+  .evt:hover { border-color: var(--faint); }
+  .evt .time { color: var(--faint); font-family: ui-monospace, Consolas, monospace; font-size: 11px; white-space: nowrap; }
+  .evt .etype {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
+  }
+  .evt .proj { color: var(--muted); font-size: 11px; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  .evt .summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--text); }
+  .evt .evt-count { font-size: 10px; font-weight: 700; color: var(--muted);
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1px 7px; white-space: nowrap; }
+  .evt-detail {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; margin: -2px 0 4px; font-family: ui-monospace, Consolas, monospace;
+    font-size: 11.5px; white-space: pre-wrap; word-break: break-word;
+    max-height: 260px; overflow-y: auto; color: var(--muted);
+  }
+  .empty { text-align: center; color: var(--faint); padding: 40px 0; font-size: 13px; }
+  .empty .big { font-size: 36px; margin-bottom: 10px; }
+
+  /* phone layout */
+  @media (max-width: 640px) {
+    .topbar { flex-wrap: wrap; gap: 8px 14px; padding: 10px 14px; }
+    .topbar .counts { margin-left: 0; width: 100%; order: 3; }
+    .wrap { padding: 14px 12px 60px; }
+    .statstrip { padding: 14px 14px 4px; gap: 0; }
+    .stat { padding-right: 16px; margin-right: 16px; }
+    .stat .num { font-size: 18px; }
+    .statstrip .period { display: none; }
+    .cards { grid-template-columns: 1fr; }
+    .feed-header { flex-wrap: wrap; }
+    .feed-filters { margin-left: 0; width: 100%; }
+    .evt { flex-wrap: wrap; }
+    .evt .summary { flex-basis: 100%; order: 5; white-space: normal; }
+    .decision { flex-wrap: wrap; }
+    .decision .d-summary { flex-basis: 100%; white-space: normal; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo">⚡ Agent <span>Pulse</span></div>
+    <div class="conn"><div class="conn-dot" id="connDot"></div><span id="connText">connecting…</span></div>
+    <div class="counts">
+      <span>working <b id="cWorking">0</b></span>
+      <span class="attn">attention <b id="cAttn">0</b></span>
+      <span>idle <b id="cIdle">0</b></span>
+    </div>
+    <button class="notif-btn" id="notifBtn">🔔 Enable alerts</button>
+  </div>
+
+  <div class="statstrip" id="statstrip">
+    <div class="stat"><span class="num" id="stSessions">—</span><span class="lbl">sessions</span></div>
+    <div class="stat"><span class="num" id="stResponse">—</span><span class="lbl">median response</span></div>
+    <div class="stat hero"><span class="num" id="stBlocked">—</span><span class="lbl">blocked · waiting on you</span></div>
+    <span class="period">last 7 days</span>
+  </div>
+
+  <div class="wrap">
+    <div id="decisions"></div>
+    <div id="sessions"></div>
+
+    <div class="feed-header">
+      <span id="feedTitle">All activity</span>
+      <button class="clear-sel" id="clearSel" style="display:none">✕ show all sessions</button>
+      <div class="feed-filters">
+        <button class="fbtn active" data-f="all">all</button>
+        <button class="fbtn" data-f="needs_input">needs input</button>
+        <button class="fbtn" data-f="error">errors</button>
+        <button class="fbtn" data-f="completed">completed</button>
+      </div>
+    </div>
+    <div class="feed" id="feed"></div>
+  </div>
+
+<script>
+// Token auth: accept ?token=... once, keep it in localStorage, attach it to
+// every API call and the WebSocket. With no token configured this is inert.
+const _urlToken = new URLSearchParams(location.search).get("token");
+if (_urlToken) {
+  localStorage.setItem("pulse_token", _urlToken);
+  history.replaceState(null, "", location.pathname);
+}
+const TOKEN = localStorage.getItem("pulse_token");
+const authFetch = (url, opts = {}) => fetch(url, TOKEN ? {
+  ...opts, headers: { ...(opts.headers || {}), "Authorization": `Bearer ${TOKEN}` },
+} : opts);
+
+const SRC_LABEL = { claude_code: "CLAUDE", opencode: "OPENCODE", kilo: "KILO", codex: "CODEX", cursor: "CURSOR" };
+const STATUS_ORDER = ["needs_input", "error", "working", "idle", "ended"];
+const GROUPS = [
+  { key: "attention", title: "Needs attention", statuses: ["needs_input", "error"], color: "var(--needs_input)" },
+  { key: "working",   title: "Working",         statuses: ["working"],              color: "var(--working)" },
+  { key: "stale",     title: "Stale — lost signal", statuses: ["stale"],            color: "var(--stale)" },
+  { key: "idle",      title: "Idle — done responding", statuses: ["idle"],          color: "var(--idle)" },
+  { key: "ended",     title: "Ended",           statuses: ["ended"],                color: "var(--ended)", collapsible: true },
+];
+
+const state = {
+  sessions: new Map(),      // instance_id -> session
+  decisions: new Map(),     // id -> pending decision
+  events: [],               // all-activity feed (newest first)
+  sessionEvents: [],        // timeline for selected session (newest first)
+  selected: null,           // instance_id or null
+  filter: "all",
+  showEnded: false,
+  notify: localStorage.getItem("pulse_notify") === "1",
+  ws: null,
+};
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const srcColor = (s) => `var(--src-${SRC_LABEL[s] ? s : "unknown"})`;
+const srcLabel = (s) => SRC_LABEL[s] || (s || "?").toUpperCase().slice(0, 8);
+const folderOf = (cwd) => cwd ? cwd.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : "unknown";
+const STATUS_TEXT = { working: "working", needs_input: "needs input", error: "error", idle: "idle", stale: "stale", ended: "ended" };
+
+function relTime(iso) {
+  if (!iso) return "";
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 10) return "just now";
+  if (s < 60) return `${Math.floor(s)}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+function clockTime(iso) {
+  return new Date(iso).toLocaleTimeString([], { hour12: false });
+}
+
+/* ---------- rendering ---------- */
+
+function renderCounts() {
+  let w = 0, a = 0, i = 0;
+  for (const s of state.sessions.values()) {
+    if (s.status === "working") w++;
+    else if (s.status === "needs_input" || s.status === "error") a++;
+    else if (s.status === "idle") i++;
+  }
+  $("cWorking").textContent = w; $("cAttn").textContent = a; $("cIdle").textContent = i;
+  document.title = a > 0 ? `(${a}!) Agent Pulse` : "Agent Pulse";
+}
+
+function sessionCard(s) {
+  const quiet = s.status === "working" && (Date.now() - new Date(s.last_seen).getTime()) > 180000;
+  const pill = `<span class="status-pill pill-${esc(s.status)}">` +
+    (s.status === "working" ? '<span class="pulse-dot"></span>' : "") +
+    esc(STATUS_TEXT[s.status] || s.status) + "</span>";
+  return `
+    <div class="card st-${esc(s.status)} ${state.selected === s.instance_id ? "selected" : ""}"
+         data-id="${esc(s.instance_id)}">
+      <div class="card-top">
+        <span class="src-chip" style="background:${srcColor(s.source)}">${esc(srcLabel(s.source))}</span>
+        <span class="card-title" title="${esc(s.cwd)}">${esc(folderOf(s.cwd))}</span>
+        <button class="away-btn" data-msg="${esc(s.instance_id)}"
+                title="Queue a follow-up message — delivered when the agent finishes its current turn">💬</button>
+        <button class="away-btn ${s.remote_approval ? "on" : ""}" data-away="${esc(s.instance_id)}"
+                title="Away mode: hold permission prompts for remote approval from this dashboard">
+          🌙${s.remote_approval ? " on" : ""}</button>
+        ${pill}
+      </div>
+      <div class="card-summary" title="${esc(s.last_summary)}">${esc(s.last_summary || "—")}</div>
+      <div class="card-meta">
+        <span class="cwd" title="${esc(s.cwd)}">${esc(s.hostname)} · ${esc(s.session_id ? s.session_id.slice(0, 8) : "?")}</span>
+        <span>${quiet ? '<span class="quiet-hint">quiet ' + relTime(s.last_seen).replace(" ago", "") + " · </span>" : ""}${relTime(s.last_seen)}</span>
+      </div>
+    </div>`;
+}
+
+function renderSessions() {
+  const all = [...state.sessions.values()];
+  let html = "";
+  for (const g of GROUPS) {
+    const items = all.filter(s => g.statuses.includes(s.status))
+      .sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
+    if (!items.length) continue;
+    if (g.collapsible && !state.showEnded) {
+      html += `<div class="group"><div class="group-title clickable" id="toggleEnded">
+        <span class="dot" style="background:${g.color}"></span>${g.title} (${items.length}) — click to show</div></div>`;
+      continue;
+    }
+    const toggle = g.collapsible ? ` id="toggleEnded"` : "";
+    html += `<div class="group">
+      <div class="group-title ${g.collapsible ? "clickable" : ""}"${toggle}>
+        <span class="dot" style="background:${g.color}"></span>${g.title} (${items.length})${g.collapsible ? " — click to hide" : ""}</div>
+      <div class="cards">${items.map(sessionCard).join("")}</div></div>`;
+  }
+  $("sessions").innerHTML = html ||
+    `<div class="empty"><div class="big">📡</div>No sessions yet — start an agent with a Pulse adapter installed.</div>`;
+
+  document.querySelectorAll(".card").forEach(el =>
+    el.addEventListener("click", () => selectSession(el.dataset.id)));
+  document.querySelectorAll("[data-msg]").forEach(el =>
+    el.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const s = state.sessions.get(el.dataset.msg);
+      const text = window.prompt(`Follow-up for ${folderOf(s?.cwd)} — delivered when its current turn ends:`);
+      if (!text || !text.trim()) return;
+      try {
+        await authFetch("/api/messages", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instance_id: el.dataset.msg, text: text.trim() }),
+        });
+      } catch {}
+    }));
+  document.querySelectorAll("[data-away]").forEach(el =>
+    el.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const s = state.sessions.get(el.dataset.away);
+      if (!s) return;
+      try {
+        await authFetch(`/api/sessions/${encodeURIComponent(s.instance_id)}/mode`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ remote_approval: !s.remote_approval }),
+        });
+      } catch {}
+    }));
+  const t = $("toggleEnded");
+  if (t) t.addEventListener("click", (e) => { e.stopPropagation(); state.showEnded = !state.showEnded; renderSessions(); });
+  renderCounts();
+}
+
+function renderDecisions() {
+  const list = [...state.decisions.values()];
+  $("decisions").innerHTML = list.map(d => {
+    const s = state.sessions.get(d.instance_id);
+    return `
+      <div class="decision">
+        <span class="d-proj">⏳ ${esc(folderOf(s?.cwd))}</span>
+        <span class="d-summary" title="${esc(d.summary)}">${esc(d.summary)}</span>
+        <button class="d-btn d-allow" data-did="${esc(d.id)}" data-answer="allow">Allow</button>
+        <button class="d-btn d-deny" data-did="${esc(d.id)}" data-answer="deny">Deny</button>
+      </div>`;
+  }).join("");
+  document.querySelectorAll(".d-btn").forEach(el =>
+    el.addEventListener("click", async () => {
+      el.disabled = true;
+      try {
+        await authFetch(`/api/decisions/${encodeURIComponent(el.dataset.did)}/respond`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: el.dataset.answer }),
+        });
+      } catch {}
+    }));
+}
+
+function evtRow(e) {
+  const s = state.sessions.get(e.instance_id);
+  return `
+    <div class="evt" data-eid="${e.id}">
+      <span class="time">${clockTime(e.created_at)}</span>
+      <span class="src-chip" style="background:${srcColor(e.source)}">${esc(srcLabel(e.source))}</span>
+      <span class="etype pill-${esc(e.event_type === "session_start" || e.event_type === "session_end" ? "ended"
+        : e.event_type === "user_prompt" || e.event_type === "activity" || e.event_type === "subagent_completed" ? "working"
+        : e.event_type === "completed" ? "idle" : e.event_type)}">${esc(e.event_type.replace("_", " "))}</span>
+      <span class="proj">${esc(folderOf(e.cwd || (s && s.cwd)))}</span>
+      <span class="summary">${esc(e.summary)}</span>
+      ${e._count > 1 ? `<span class="evt-count">×${e._count}</span>` : ""}
+    </div>`;
+}
+
+// Collapse consecutive rows with the same (instance, type, summary) into
+// one, keeping the newest and tagging a count — cuts repeated-tool noise.
+function coalesce(list) {
+  const out = [];
+  for (const e of list) {
+    const prev = out[out.length - 1];
+    if (prev && prev.instance_id === e.instance_id
+        && prev.event_type === e.event_type && prev.summary === e.summary) {
+      prev._count = (prev._count || 1) + 1;
+    } else {
+      out.push({ ...e, _count: 1 });
+    }
+  }
+  return out;
+}
+
+function visibleEvents() {
+  let list = state.selected ? state.sessionEvents : state.events;
+  if (state.filter !== "all") list = list.filter(e => e.event_type === state.filter);
+  return coalesce(list).slice(0, 200);
+}
+
+function renderFeed() {
+  const list = visibleEvents();
+  $("feed").innerHTML = list.length ? list.map(evtRow).join("")
+    : `<div class="empty">No events${state.filter !== "all" ? " for this filter" : " yet"}.</div>`;
+  document.querySelectorAll(".evt").forEach(el => el.addEventListener("click", () => {
+    const existing = el.nextElementSibling;
+    if (existing && existing.classList.contains("evt-detail")) { existing.remove(); return; }
+    const ev = (state.selected ? state.sessionEvents : state.events).find(x => String(x.id) === el.dataset.eid);
+    if (!ev) return;
+    const d = document.createElement("div");
+    d.className = "evt-detail";
+    d.textContent = JSON.stringify(ev.payload, null, 2);
+    el.after(d);
+  }));
+}
+
+function renderAll() { renderSessions(); renderFeed(); }
+
+/* ---------- selection ---------- */
+
+async function selectSession(id) {
+  if (state.selected === id) { clearSelection(); return; }
+  state.selected = id;
+  const s = state.sessions.get(id);
+  $("feedTitle").textContent = `Session — ${folderOf(s?.cwd)} (${srcLabel(s?.source)})`;
+  $("clearSel").style.display = "";
+  try {
+    const r = await authFetch(`/api/sessions/${encodeURIComponent(id)}/events?limit=200`);
+    state.sessionEvents = await r.json();
+  } catch { state.sessionEvents = []; }
+  renderAll();
+}
+function clearSelection() {
+  state.selected = null; state.sessionEvents = [];
+  $("feedTitle").textContent = "All activity";
+  $("clearSel").style.display = "none";
+  renderAll();
+}
+
+/* ---------- notifications ---------- */
+
+function maybeNotify(e) {
+  if (!state.notify || Notification.permission !== "granted") return;
+  if (e.event_type !== "needs_input" && e.event_type !== "error") return;
+  const title = `${folderOf(e.cwd)} — ${e.event_type === "error" ? "error" : "needs your input"}`;
+  try { new Notification(title, { body: e.summary, tag: e.instance_id }); } catch {}
+}
+
+function setNotifyUi() {
+  const b = $("notifBtn");
+  const on = state.notify && Notification.permission === "granted";
+  b.classList.toggle("on", on);
+  b.textContent = on ? "🔔 Alerts on" : "🔔 Enable alerts";
+}
+
+$("notifBtn").addEventListener("click", async () => {
+  if (state.notify) { state.notify = false; }
+  else {
+    if (Notification.permission !== "granted") await Notification.requestPermission();
+    state.notify = Notification.permission === "granted";
+  }
+  localStorage.setItem("pulse_notify", state.notify ? "1" : "0");
+  setNotifyUi();
+});
+
+/* ---------- data + websocket ---------- */
+
+async function loadAll() {
+  // Each endpoint fails independently — one 500 must never blank the page.
+  const grab = async (url, fallback) => {
+    try { return await (await authFetch(url)).json(); } catch { return fallback; }
+  };
+  const [sessions, events, decisions] = await Promise.all([
+    grab("/api/sessions", []), grab("/api/events?limit=150", []), grab("/api/decisions", []),
+  ]);
+  state.sessions = new Map(sessions.map(s => [s.instance_id, s]));
+  state.events = events;
+  state.decisions = new Map(decisions.map(d => [d.id, d]));
+  renderAll();
+  renderDecisions();
+  loadStats();
+}
+
+async function loadStats() {
+  try {
+    const s = await (await authFetch("/api/stats")).json();
+    const fmt = (sec) => sec == null ? "—" : sec < 90 ? `${Math.round(sec)}s`
+      : sec < 5400 ? `${Math.round(sec / 60)}m` : `${(sec / 3600).toFixed(1)}h`;
+    $("stSessions").textContent = s.sessions;
+    $("stResponse").textContent = fmt(s.median_response_s);
+    $("stBlocked").textContent = fmt(s.total_blocked_s);
+  } catch {}
+}
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/ws${TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : ""}`);
+  state.ws = ws;
+
+  ws.onopen = () => {
+    $("connDot").classList.add("on"); $("connText").textContent = "live";
+    loadAll();
+  };
+  ws.onmessage = (msg) => {
+    const { type, data } = JSON.parse(msg.data);
+    if (type === "session") {
+      state.sessions.set(data.instance_id, data);
+      renderSessions();
+    } else if (type === "decision") {
+      if (data.status === "pending") state.decisions.set(data.id, data);
+      else state.decisions.delete(data.id);
+      renderDecisions();
+    } else if (type === "event") {
+      state.events.unshift(data);
+      if (state.events.length > 300) state.events.pop();
+      if (state.selected === data.instance_id) {
+        state.sessionEvents.unshift(data);
+        if (state.sessionEvents.length > 300) state.sessionEvents.pop();
+      }
+      maybeNotify(data);
+      renderFeed();
+    }
+  };
+  ws.onclose = () => {
+    $("connDot").classList.remove("on"); $("connText").textContent = "reconnecting…";
+    setTimeout(connect, 2500);
+  };
+  ws.onerror = () => ws.close();
+}
+
+/* ---------- filters ---------- */
+
+document.querySelectorAll(".fbtn").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".fbtn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.filter = b.dataset.f;
+  renderFeed();
+}));
+$("clearSel").addEventListener("click", clearSelection);
+
+/* ---------- boot ---------- */
+
+setNotifyUi();
+loadAll();
+connect();
+setInterval(renderSessions, 15000);   // keep relative times + quiet hints fresh
+</script>
+</body>
+</html>

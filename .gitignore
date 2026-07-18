@@ -1,0 +1,37 @@
+# Runtime data — contains real prompts/commands/cwd; never publish
+events.db
+events.db-wal
+events.db-shm
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets / local env
+.env
+.env.*
+*.log
+
+# Tool runtime caches (canonical plugins live in agent_pulse/adapters/)
+.opencode/
+.kilo/
+
+# Local Claude settings (may contain machine-specific hook paths)
+.claude/settings.local.json
+
+# Python build/artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# Node / test tooling
+node_modules/
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db

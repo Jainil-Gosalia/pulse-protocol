@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pulse-protocol.dev/schemas/0.1/event.json",
+  "title": "Pulse Protocol event envelope",
+  "description": "One session/attention event from a coding agent emitter to a collector. See spec/pulse-protocol.md section 5.",
+  "type": "object",
+  "required": ["source", "instance_id", "hostname", "event_type", "summary"],
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "description": "Protocol version; collectors assume \"0.1\" when absent.",
+      "examples": ["0.1"]
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "Tool identifier in lowercase snake_case. Well-known: claude_code, opencode, kilo, codex, cursor. Unknown values are valid."
+    },
+    "instance_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable unique id per (host, session); opaque to collectors."
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "The tool's native session identifier."
+    },
+    "hostname": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cwd": {
+      "type": ["string", "null"],
+      "description": "Working directory / project root."
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Vocabulary of spec section 6. Collectors treat unknown types as activity.",
+      "examples": ["session_start", "user_prompt", "activity", "subagent_completed",
+                   "heartbeat", "needs_input", "error", "completed", "session_end"]
+    },
+    "summary": {
+      "type": "string",
+      "description": "One human-readable line; feeds and notifications show this."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Tool-specific extras; opaque to collectors."
+    },
+    "hook_event_name": {
+      "type": ["string", "null"],
+      "description": "Native event name at the source, for debugging."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC; collector assigns receipt time when absent."
+    }
+  }
+}

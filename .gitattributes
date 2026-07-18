@@ -1,0 +1,5 @@
+# Normalize line endings so cross-platform contributors don't see churn.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
