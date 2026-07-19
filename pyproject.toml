@@ -58,3 +58,7 @@ include = ["agent_pulse*"]
 
 [tool.setuptools.package-data]
 agent_pulse = ["adapters/*.js", "collector/static/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

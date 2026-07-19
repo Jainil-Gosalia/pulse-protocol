@@ -24,12 +24,13 @@ If your adapter can't guarantee that, it's not ready to merge. This is the whole
 ## Running the checks
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
+pytest                                              # unit tests (tests/)
 python quick_verify.py                              # end-to-end suite (isolated port + db)
 python -m agent_pulse.cli conformance --url http://127.0.0.1:8765/api/events
 ```
 
-CI runs both on every PR across Python 3.9–3.13. Green before review, please.
+CI runs all three on every PR across Python 3.9–3.13. Green before review, please. If you touch the state machine or an adapter's mapping, add/adjust a unit test in `tests/`.
 
 ## Changing the protocol
 
