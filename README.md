@@ -12,7 +12,9 @@ Claude Code, OpenCode, Kilo, Codex, Cursor — all in one live dashboard that te
 [![Python](https://img.shields.io/badge/python-3.9%2B-3776ab.svg)](pyproject.toml)
 [![Reference implementation](https://img.shields.io/badge/status-reference%20implementation-22c55e.svg)](#its-a-protocol-not-just-an-app)
 
-<img src="https://raw.githubusercontent.com/Jainil-Gosalia/pulse-protocol/main/docs/dashboard.png" alt="Agent Pulse dashboard" width="820">
+<img src="https://raw.githubusercontent.com/Jainil-Gosalia/pulse-protocol/main/docs/one-inbox.gif" alt="Claude Code, Kilo and OpenCode reporting into one live Agent Pulse dashboard" width="820">
+
+<sub>Claude Code, Kilo and OpenCode — three different tools, one inbox, updating live.</sub>
 
 </div>
 
@@ -51,6 +53,16 @@ And it answers the one question that matters — *which of my agents needs me?* 
 | 💬 **Steer agents remotely** | Queue a follow-up ("also update the README") from the dashboard; when the agent finishes its turn it keeps going with your message instead of stopping. |
 | ⏱️ **Attention analytics** | See how long your agents spend *blocked waiting on you* — the real throughput metric nobody else measures. |
 | 🪶 **Zero-risk adapters** | Every adapter fails silent with a short timeout. If the collector is down, your agents don't even notice. |
+
+### 🌙 Away mode: approve a tool call without going back to your desk
+
+<div align="center">
+<img src="https://raw.githubusercontent.com/Jainil-Gosalia/pulse-protocol/main/docs/away-mode.gif" alt="A permission prompt arriving on the dashboard with Allow and Deny buttons, then being approved" width="820">
+</div>
+
+Flip a session to away mode and its permission prompts stop blocking in the terminal — they arrive on the dashboard (and on your phone) with **Allow / Deny**. The session moves to *needs attention* and a timer starts counting how long it's been blocked on you.
+
+If nothing answers in time, it falls back to the normal terminal prompt. Away mode can never leave an agent **more** stuck than it was without it.
 
 ---
 
